@@ -1,4 +1,4 @@
-package mud
+package panda
 
 type CCSDSPacketType int
 
