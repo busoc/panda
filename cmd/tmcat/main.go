@@ -2,18 +2,17 @@ package main
 
 import (
 	"crypto/md5"
-	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync/atomic"
 	"text/template"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"golang.org/x/net/websocket"
 
 	"github.com/busoc/panda"
 	"github.com/busoc/panda/cmd/internal/opts"
@@ -26,7 +25,8 @@ var commands = []*cli.Command{
 	{
 		Run:   runShow,
 		Usage: "show [-a] [-g] [-s] <source>",
-		Short: "",
+		Alias: []string{"dump"},
+		Short: "dump packet headers",
 	},
 	{
 		Run:   runDistrib,
@@ -81,7 +81,7 @@ func runShow(cmd *cli.Command, args []string) error {
 	if err := cmd.Flag.Parse(args); err != nil {
 		return err
 	}
-	queue, err := tm.Packets(cmd.Flag.Arg(0), *apid, pids)
+	queue, err := FetchPackets(cmd.Flag.Arg(0), *apid, pids)
 	if err != nil {
 		return err
 	}
@@ -124,71 +124,76 @@ func runShow(cmd *cli.Command, args []string) error {
 	return nil
 }
 
+func FetchPackets(s string, apid int, pids []uint32) (<-chan panda.Telemetry, error) {
+	i, _, err := net.SplitHostPort(s)
+	if err != nil {
+		return tm.Packets(s, apid, pids)
+	}
+	ip := net.ParseIP(i)
+	if ip != nil && ip.IsMulticast() {
+		return tm.Packets(s, apid, pids)
+	}
+	c, err := websocket.Dial(fmt.Sprintf("ws://%s/", s), "", fmt.Sprintf("http://%s/", s))
+	if err != nil {
+		return nil, err
+	}
+	return tm.Filter(c, tm.NewDecoder(apid, pids)), nil
+}
+
 func runDistrib(cmd *cli.Command, args []string) error {
 	if err := cmd.Flag.Parse(args); err != nil {
 		return err
 	}
-	f, err := os.Open(flag.Arg(0))
+	f, err := os.Open(cmd.Flag.Arg(0))
 	if err != nil {
 		return err
 	}
-	v := struct {
-		Addr    string `toml:"server"`
-		Group   string `toml:"group"`
-		Clients int32  `toml:"clients"`
-		Apids   []int  `toml:"apid"`
+	c := struct {
+		Addr   string   `toml:"addr"`
+		Client int32    `toml:"client"`
+		Groups []*group `toml:"group"`
 	}{}
-	if err := toml.NewDecoder(f).Decode(&v); err != nil {
-		log.Fatalln(err)
+	if err := toml.NewDecoder(f).Decode(&c); err != nil {
+		return err
 	}
-	defer f.Close()
+	f.Close()
 
-	http.Handle("/", distribute(v.Group, v.Clients))
-	return http.ListenAndServe(v.Addr, nil)
+	for _, g := range c.Groups {
+		g.limit = c.Client
+		http.Handle("/"+g.Name+"/", websocket.Handler(g.Handle))
+	}
+	return http.ListenAndServe(c.Addr, nil)
 }
 
-func distribute(a string, c int32) http.Handler {
-	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin:     func(r *http.Request) bool { return true },
+type group struct {
+	Name    string   `toml:"name"`
+	Addr    string   `toml:"addr"`
+	Apid    int      `toml:"apid"`
+	Sources []uint32 `toml:"source"`
+
+	limit int32
+	count int32
+}
+
+func (g *group) Handle(ws *websocket.Conn) {
+	defer ws.Close()
+
+	curr := atomic.AddInt32(&g.count, 1)
+	defer atomic.AddInt32(&g.count, -1)
+	if g.limit > 0 && curr >= int32(g.limit) {
+		return
 	}
-	var count int32
-	f := func(w http.ResponseWriter, r *http.Request) {
-		curr := atomic.AddInt32(&count, 1)
-		if c > 0 && curr >= c {
-			w.WriteHeader(http.StatusTooManyRequests)
-			return
-		}
-		defer atomic.AddInt32(&count, -1)
-
-		q := r.URL.Query()
-		apid, err := strconv.Atoi(q.Get("apid"))
-		if err != nil && len(q.Get("apid")) > 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		conn, err := upgrader.Upgrade(w, r, nil)
+	queue, err := tm.Packets(g.Addr, g.Apid, g.Sources)
+	if err != nil {
+		return
+	}
+	for p := range queue {
+		bs, err := p.Bytes()
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			continue
 		}
-		defer conn.Close()
-
-		queue, err := tm.Packets(a, apid, nil)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+		if _, err := ws.Write(bs); err != nil {
 			return
-		}
-		for p := range queue {
-			bs, err := p.Bytes()
-			if err != nil {
-				continue
-			}
-			if err := conn.WriteMessage(websocket.BinaryMessage, bs); err != nil {
-				return
-			}
 		}
 	}
-	return http.HandlerFunc(f)
 }
