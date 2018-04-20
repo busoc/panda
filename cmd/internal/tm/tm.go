@@ -26,15 +26,15 @@ func (r raw) Payload() []byte {
 
 func Open(a string) (io.Reader, error) {
 	if _, _, err := net.SplitHostPort(a); err == nil {
-		return mud.Listen("tm", a)
+		return panda.Listen("tm", a)
 	}
-	return mud.Walk("tm", a)
+	return panda.Walk("tm", a)
 }
 
-func Filter(r io.Reader, d mud.Decoder) <-chan mud.Telemetry {
-	q := make(chan mud.Telemetry)
+func Filter(r io.Reader, d panda.Decoder) <-chan panda.Telemetry {
+	q := make(chan panda.Telemetry)
 	go func() {
-		source := mud.NewReader(r, d)
+		source := panda.NewReader(r, d)
 		defer func() {
 			close(q)
 			source.Close()
@@ -43,10 +43,10 @@ func Filter(r io.Reader, d mud.Decoder) <-chan mud.Telemetry {
 			p, err := source.Read()
 			switch err {
 			case nil:
-				if p, ok := p.(mud.Telemetry); ok {
+				if p, ok := p.(panda.Telemetry); ok {
 					q <- p
 				}
-			case mud.ErrDone:
+			case panda.ErrDone:
 				return
 			}
 		}
@@ -54,7 +54,7 @@ func Filter(r io.Reader, d mud.Decoder) <-chan mud.Telemetry {
 	return q
 }
 
-func Packets(addr string, apid int, pids []uint32) (<-chan mud.Telemetry, error) {
+func Packets(addr string, apid int, pids []uint32) (<-chan panda.Telemetry, error) {
 	r, err := Open(addr)
 	if err != nil {
 		return nil, err
@@ -65,11 +65,11 @@ func Packets(addr string, apid int, pids []uint32) (<-chan mud.Telemetry, error)
 type Decoder struct {
 	pid     []byte
 	sources [][]byte
-	decoder mud.Decoder
+	decoder panda.Decoder
 }
 
-func NewDecoder(apid int, ps []uint32) mud.Decoder {
-	d := mud.DecodeTM()
+func NewDecoder(apid int, ps []uint32) panda.Decoder {
+	d := panda.DecodeTM()
 	if apid <= 0 && len(ps) == 0 {
 		return d
 	}
@@ -90,18 +90,18 @@ func NewDecoder(apid int, ps []uint32) mud.Decoder {
 	return Decoder{pid, is, d}
 }
 
-func (d Decoder) Decode(bs []byte) (int, mud.Packet, error) {
+func (d Decoder) Decode(bs []byte) (int, panda.Packet, error) {
 	if len(d.pid) > 0 && !bytes.HasPrefix(bs, d.pid) {
-		return len(bs), nil, mud.ErrSkip
+		return len(bs), nil, panda.ErrSkip
 	}
 	if len(d.sources) == 0 {
 		return d.decoder.Decode(bs)
 	}
-	ix := mud.CCSDSLength + mud.ESALength
+	ix := panda.CCSDSLength + panda.ESALength
 	for _, s := range d.sources {
 		if bytes.Equal(bs[ix-len(s):ix], s) {
 			return d.decoder.Decode(bs)
 		}
 	}
-	return len(bs), nil, mud.ErrSkip
+	return len(bs), nil, panda.ErrSkip
 }

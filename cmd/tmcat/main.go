@@ -85,7 +85,7 @@ func runShow(cmd *cli.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	gaps := make(map[int]mud.Telemetry)
+	gaps := make(map[int]panda.Telemetry)
 	for p := range queue {
 		var s []byte
 		if *sum {
@@ -107,7 +107,7 @@ func runShow(cmd *cli.Command, args []string) error {
 		}
 
 		fmt.Printf(pattern,
-			mud.AdjustTime(e.Timestamp(), *gps).Format("2006-01-02T15:04:05.000Z"),
+			panda.AdjustTime(e.Timestamp(), *gps).Format("2006-01-02T15:04:05.000Z"),
 			c.Sequence(),
 			c.SegmentationFlag(),
 			c.Apid(),
