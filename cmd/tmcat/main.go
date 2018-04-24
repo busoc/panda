@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -33,6 +36,11 @@ var commands = []*cli.Command{
 	{
 		Run:   runDistrib,
 		Usage: "distrib <config.toml>",
+		Short: "",
+	},
+	{
+		Run:   runReplay,
+		Usage: "replay [-d] [-r] [-l] <group>",
 		Short: "",
 	},
 }
@@ -144,7 +152,7 @@ func FetchPackets(s string, apid int, pids []uint32) (<-chan panda.Telemetry, er
 		return tm.Filter(c, tm.NewDecoder(apid, pids)), nil
 	}
 
-	i, _, err  := net.SplitHostPort(s)
+	i, _, err := net.SplitHostPort(s)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +205,7 @@ func (g *group) Handle(ws *websocket.Conn) {
 	if g.limit > 0 && curr >= int32(g.limit) {
 		return
 	}
-	c := websocket.Codec {
+	c := websocket.Codec{
 		Marshal: func(v interface{}) ([]byte, byte, error) {
 			bs := v.([]byte)
 			return bs, websocket.BinaryFrame, nil
@@ -216,4 +224,64 @@ func (g *group) Handle(ws *websocket.Conn) {
 			return
 		}
 	}
+}
+
+func runReplay(cmd *cli.Command, args []string) error {
+	loop := cmd.Flag.Int("l", 0, "loop")
+	rate := cmd.Flag.Int("r", 0, "rate")
+	datadir := cmd.Flag.String("d", os.TempDir(), "datadir")
+	if err := cmd.Flag.Parse(args); err != nil {
+		return err
+	}
+	c, err := net.Dial("udp", cmd.Flag.Arg(0))
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	for i := 0; *loop <= 0 || i < *loop; i++ {
+		if err := replay(c, *datadir, *rate); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func replay(c net.Conn, datadir string, rate int) error {
+	if rate == 0 {
+		rate++
+	}
+	queue, err := tm.Packets(datadir, 0, nil)
+	if err != nil {
+		return err
+	}
+	var (
+		prev  time.Time
+		delta time.Duration
+		buf   bytes.Buffer
+	)
+	for p := range queue {
+		time.Sleep(delta / time.Duration(rate))
+
+		n := time.Duration(time.Now().UnixNano())
+		s, ns := n/time.Second, n/time.Millisecond
+		binary.Write(&buf, binary.BigEndian, uint8(panda.TagTM))
+		binary.Write(&buf, binary.BigEndian, uint32(s))
+		binary.Write(&buf, binary.BigEndian, uint8(ns)%255)
+		binary.Write(&buf, binary.BigEndian, uint32(0))
+		bs, err := p.Bytes()
+		if err != nil {
+			return err
+		}
+		buf.Write(bs)
+
+		if _, err := io.Copy(c, &buf); err != nil {
+			return err
+		}
+		if !prev.IsZero() {
+			delta = p.Timestamp().Sub(prev)
+		}
+		prev = p.Timestamp()
+	}
+	return nil
 }
