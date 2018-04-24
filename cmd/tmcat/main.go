@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -130,19 +131,27 @@ func runShow(cmd *cli.Command, args []string) error {
 }
 
 func FetchPackets(s string, apid int, pids []uint32) (<-chan panda.Telemetry, error) {
-	i, _, err := net.SplitHostPort(s)
-	if err != nil {
+	if i, err := os.Stat(s); err == nil && i.IsDir() {
 		return tm.Packets(s, apid, pids)
 	}
-	ip := net.ParseIP(i)
-	if ip != nil && ip.IsMulticast() {
-		return tm.Packets(s, apid, pids)
+	if u, err := url.Parse(s); err == nil && u.Scheme == "ws" {
+		o := *u
+		o.Scheme = "http"
+		c, err := websocket.Dial(u.String(), "", o.String())
+		if err != nil {
+			return nil, err
+		}
+		return tm.Filter(c, tm.NewDecoder(apid, pids)), nil
 	}
-	c, err := websocket.Dial(fmt.Sprintf("ws://%s/", s), "", fmt.Sprintf("http://%s/", s))
+
+	i, _, err  := net.SplitHostPort(s)
 	if err != nil {
 		return nil, err
 	}
-	return tm.Filter(c, tm.NewDecoder(apid, pids)), nil
+	if ip := net.ParseIP(i); ip != nil && ip.IsMulticast() {
+		return tm.Packets(s, apid, pids)
+	}
+	return nil, fmt.Errorf("can not fetch packets from %s", s)
 }
 
 func runDistrib(cmd *cli.Command, args []string) error {
