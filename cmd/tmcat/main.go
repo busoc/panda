@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -78,6 +79,7 @@ func runShow(cmd *cli.Command, args []string) error {
 	apid := cmd.Flag.Int("a", -1, "apid")
 	sum := cmd.Flag.Bool("s", false, "sum")
 	gps := cmd.Flag.Bool("g", false, "gps")
+	debug := cmd.Flag.Bool("b", false, "debug")
 	if err := cmd.Flag.Parse(args); err != nil {
 		return err
 	}
@@ -119,6 +121,9 @@ func runShow(cmd *cli.Command, args []string) error {
 			delta,
 			s,
 		)
+		if *debug {
+			fmt.Println(hex.Dump(p.Payload()))
+		}
 		gaps[c.Apid()] = p
 	}
 	return nil
@@ -183,6 +188,12 @@ func (g *group) Handle(ws *websocket.Conn) {
 	if g.limit > 0 && curr >= int32(g.limit) {
 		return
 	}
+	c := websocket.Codec {
+		Marshal: func(v interface{}) ([]byte, byte, error) {
+			bs := v.([]byte)
+			return bs, websocket.BinaryFrame, nil
+		},
+	}
 	queue, err := tm.Packets(g.Addr, g.Apid, g.Sources)
 	if err != nil {
 		return
@@ -192,7 +203,7 @@ func (g *group) Handle(ws *websocket.Conn) {
 		if err != nil {
 			continue
 		}
-		if _, err := ws.Write(bs); err != nil {
+		if err := c.Send(ws, bs); err != nil {
 			return
 		}
 	}
