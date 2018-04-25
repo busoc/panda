@@ -73,7 +73,8 @@ func DecodeTM() Decoder {
 		tm.Data = make([]byte, tm.CCSDSHeader.Length+1-ESALength)
 		copy(tm.Data, bs[CCSDSLength+ESALength:])
 
-		return CCSDSLength + ESALength + len(tm.Data), tm, nil
+		// return CCSDSLength + ESALength + len(tm.Data), tm, nil
+		return 0, tm, nil
 	}
 	return DecoderFunc(f)
 }
