@@ -263,7 +263,7 @@ func wait(d time.Duration, r int) {
 	if d == 0 {
 		return
 	}
-	time.Sleep(d/time.Duration(r))
+	time.Sleep(d / time.Duration(r))
 }
 
 func makePacket(p panda.Packet, adjust bool) (bytes.Buffer, error) {
