@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -227,6 +228,8 @@ func (g *group) Handle(ws *websocket.Conn) {
 }
 
 func runReplay(cmd *cli.Command, args []string) error {
+	var gap opts.Gap
+	cmd.Flag.Var(&gap, "g", "gap")
 	loop := cmd.Flag.Int("l", 0, "loop")
 	rate := cmd.Flag.Int("r", 0, "rate")
 	datadir := cmd.Flag.String("d", os.TempDir(), "datadir")
@@ -239,7 +242,7 @@ func runReplay(cmd *cli.Command, args []string) error {
 	}
 	defer c.Close()
 	for i := 0; *loop <= 0 || i < *loop; i++ {
-		if err := replay(c, *datadir, *rate); err != nil {
+		if err := replay(c, *datadir, *rate, gap); err != nil {
 			return err
 		}
 	}
@@ -247,9 +250,17 @@ func runReplay(cmd *cli.Command, args []string) error {
 	return nil
 }
 
-func replay(c net.Conn, datadir string, rate int) error {
+func replay(c net.Conn, datadir string, rate int, gap opts.Gap) error {
 	if rate == 0 {
 		rate++
+	}
+	if !gap.IsZero() {
+		c = &conn{
+			Conn:   c,
+			gap:    gap,
+			writer: c,
+			after:  time.After(gap.Next()),
+		}
 	}
 	queue, err := tm.Packets(datadir, 0, nil)
 	if err != nil {
@@ -280,8 +291,39 @@ func replay(c net.Conn, datadir string, rate int) error {
 		}
 		if !prev.IsZero() {
 			delta = p.Timestamp().Sub(prev)
+			if delta > time.Hour {
+				delta = 0
+			}
 		}
 		prev = p.Timestamp()
 	}
 	return nil
+}
+
+type conn struct {
+	net.Conn
+	gap opts.Gap
+
+	writer io.Writer
+	after  <-chan time.Time
+}
+
+func (c *conn) Write(bs []byte) (int, error) {
+	select {
+	case <-c.after:
+		var (
+			d time.Duration
+			w io.Writer
+		)
+		if t, ok := c.gap.Wait(); !ok {
+			w, d = ioutil.Discard, t
+			log.Println("los start")
+		} else {
+			log.Println("aos start")
+			w, d = c.Conn, t
+		}
+		c.writer, c.after = w, time.After(d)
+	default:
+	}
+	return c.writer.Write(bs)
 }

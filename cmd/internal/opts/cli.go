@@ -6,7 +6,58 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
+
+type Gap struct {
+	aos time.Duration
+	los time.Duration
+
+	mu   sync.Mutex
+	curr uint8
+}
+
+func (g *Gap) Next() time.Duration {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if mod := g.curr % 2; mod != 0 && g.los > 0 {
+		return g.los
+	}
+	return g.aos
+}
+
+func (g *Gap) Wait() (time.Duration, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.curr++
+	if mod := g.curr % 2; mod != 0 && g.los > 0 {
+		return g.los, false
+	}
+	return g.aos, true
+}
+
+func (g *Gap) IsZero() bool {
+	return g.aos == 0 && g.los == 0
+}
+
+func (g *Gap) String() string {
+	return fmt.Sprintf("%s:%s", g.aos, g.los)
+}
+
+func (g *Gap) Set(v string) error {
+	vs := strings.Split(v, ":")
+	var err error
+	g.aos, err = time.ParseDuration(vs[0])
+	if err != nil {
+		return err
+	}
+	g.los, err = time.ParseDuration(vs[1])
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 type SIDSet []uint32
 
