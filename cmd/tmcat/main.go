@@ -213,13 +213,10 @@ func (g *group) Handle(ws *websocket.Conn) {
 	if g.limit > 0 && curr >= int32(g.limit) {
 		return
 	}
-	var (
-		rate   int
-		adjust bool
-	)
+	var rate int
 	if r := ws.Request(); strings.HasPrefix(r.URL.Path, "/replay/") {
 		q := r.URL.Query()
-		rate, adjust = 1, true
+		rate = 1
 		if r, err := strconv.ParseUint(q.Get("rate"), 10, 64); err == nil {
 			rate = int(r)
 		}
@@ -231,11 +228,8 @@ func (g *group) Handle(ws *websocket.Conn) {
 			if !ok {
 				return nil, websocket.UnknownFrame, fmt.Errorf("%T", p)
 			}
-			buf, err := makePacket(p, adjust)
-			if buf.Len() == 0 {
-				return nil, websocket.UnknownFrame, fmt.Errorf("empty buffer")
-			}
-			return buf.Bytes(), websocket.BinaryFrame, err
+			bs, err := p.Bytes()
+			return bs, websocket.BinaryFrame, err
 		},
 	}
 	var (
@@ -249,7 +243,6 @@ func (g *group) Handle(ws *websocket.Conn) {
 	for p := range queue {
 		wait(delta, rate)
 		if err := codec.Send(ws, p); err != nil {
-			log.Println(err)
 			return
 		}
 		if !prev.IsZero() && rate > 0 {
@@ -264,25 +257,6 @@ func wait(d time.Duration, r int) {
 		return
 	}
 	time.Sleep(d / time.Duration(r))
-}
-
-func makePacket(p panda.Packet, adjust bool) (bytes.Buffer, error) {
-	var buf bytes.Buffer
-	if adjust {
-		n := time.Duration(time.Now().UnixNano())
-		s, ns := n/time.Second, n/time.Millisecond
-
-		binary.Write(&buf, binary.BigEndian, uint8(panda.TagTM))
-		binary.Write(&buf, binary.BigEndian, uint32(s))
-		binary.Write(&buf, binary.BigEndian, uint8(ns)%255)
-		binary.Write(&buf, binary.BigEndian, uint32(0))
-	}
-	bs, err := p.Bytes()
-	if err != nil {
-		return buf, err
-	}
-	buf.Write(bs)
-	return buf, nil
 }
 
 func runReplay(cmd *cli.Command, args []string) error {
@@ -327,13 +301,23 @@ func replay(c net.Conn, datadir string, rate int, gap opts.Gap) error {
 	var (
 		prev  time.Time
 		delta time.Duration
+		buf   bytes.Buffer
 	)
 	for p := range queue {
 		time.Sleep(delta / time.Duration(rate))
-		buf, err := makePacket(p, true)
-		if err != nil || buf.Len() == 0 {
+
+		n := time.Duration(time.Now().UnixNano())
+		s, ns := n/time.Second, n/time.Millisecond
+
+		binary.Write(&buf, binary.BigEndian, uint8(panda.TagTM))
+		binary.Write(&buf, binary.BigEndian, uint32(s))
+		binary.Write(&buf, binary.BigEndian, uint8(ns)%255)
+		binary.Write(&buf, binary.BigEndian, uint32(0))
+		bs, err := p.Bytes()
+		if err != nil {
 			return err
 		}
+		buf.Write(bs)
 		if _, err := io.Copy(c, &buf); err != nil {
 			return err
 		}
