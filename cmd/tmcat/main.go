@@ -14,6 +14,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"text/template"
 	"time"
@@ -117,7 +119,6 @@ func runShow(cmd *cli.Command, args []string) error {
 		if delta < 0 && e.Timestamp().Sub(prev.ESAHeader.Timestamp()) >= time.Second {
 			delta = (1 << 14) - 1 + c.Sequence() - prev.CCSDSHeader.Sequence()
 		}
-
 		fmt.Printf(pattern,
 			panda.AdjustTime(e.Timestamp(), *gps).Format("2006-01-02T15:04:05.000Z"),
 			c.Sequence(),
@@ -183,7 +184,13 @@ func runDistrib(cmd *cli.Command, args []string) error {
 
 	for _, g := range c.Groups {
 		g.limit = c.Client
-		http.Handle("/"+g.Name+"/", websocket.Handler(g.Handle))
+		var prefix string
+		if _, _, err := net.SplitHostPort(g.Addr); err == nil {
+			prefix = "/realtime/"
+		} else {
+			prefix = "/replay/"
+		}
+		http.Handle(prefix+filepath.Clean(g.Name), websocket.Handler(g.Handle))
 	}
 	return http.ListenAndServe(c.Addr, nil)
 }
@@ -206,25 +213,76 @@ func (g *group) Handle(ws *websocket.Conn) {
 	if g.limit > 0 && curr >= int32(g.limit) {
 		return
 	}
-	c := websocket.Codec{
+	var (
+		rate   int
+		adjust bool
+	)
+	if r := ws.Request(); strings.HasPrefix(r.URL.Path, "/replay/") {
+		q := r.URL.Query()
+		rate, adjust = 1, true
+		if r, err := strconv.ParseUint(q.Get("rate"), 10, 64); err == nil {
+			rate = int(r)
+		}
+	}
+
+	codec := websocket.Codec{
 		Marshal: func(v interface{}) ([]byte, byte, error) {
-			bs := v.([]byte)
-			return bs, websocket.BinaryFrame, nil
+			p, ok := v.(panda.Telemetry)
+			if !ok {
+				return nil, websocket.UnknownFrame, fmt.Errorf("%T", p)
+			}
+			buf, err := makePacket(p, adjust)
+			if buf.Len() == 0 {
+				return nil, websocket.UnknownFrame, fmt.Errorf("empty buffer")
+			}
+			return buf.Bytes(), websocket.BinaryFrame, err
 		},
 	}
+	var (
+		prev  time.Time
+		delta time.Duration
+	)
 	queue, err := tm.Packets(g.Addr, g.Apid, g.Sources)
 	if err != nil {
 		return
 	}
 	for p := range queue {
-		bs, err := p.Bytes()
-		if err != nil {
-			continue
-		}
-		if err := c.Send(ws, bs); err != nil {
+		wait(delta, rate)
+		if err := codec.Send(ws, p); err != nil {
+			log.Println(err)
 			return
 		}
+		if !prev.IsZero() && rate > 0 {
+			delta = p.Timestamp().Sub(prev)
+		}
+		prev = p.Timestamp()
 	}
+}
+
+func wait(d time.Duration, r int) {
+	if d == 0 {
+		return
+	}
+	time.Sleep(d/time.Duration(r))
+}
+
+func makePacket(p panda.Packet, adjust bool) (bytes.Buffer, error) {
+	var buf bytes.Buffer
+	if adjust {
+		n := time.Duration(time.Now().UnixNano())
+		s, ns := n/time.Second, n/time.Millisecond
+
+		binary.Write(&buf, binary.BigEndian, uint8(panda.TagTM))
+		binary.Write(&buf, binary.BigEndian, uint32(s))
+		binary.Write(&buf, binary.BigEndian, uint8(ns)%255)
+		binary.Write(&buf, binary.BigEndian, uint32(0))
+	}
+	bs, err := p.Bytes()
+	if err != nil {
+		return buf, err
+	}
+	buf.Write(bs)
+	return buf, nil
 }
 
 func runReplay(cmd *cli.Command, args []string) error {
@@ -269,23 +327,13 @@ func replay(c net.Conn, datadir string, rate int, gap opts.Gap) error {
 	var (
 		prev  time.Time
 		delta time.Duration
-		buf   bytes.Buffer
 	)
 	for p := range queue {
 		time.Sleep(delta / time.Duration(rate))
-
-		n := time.Duration(time.Now().UnixNano())
-		s, ns := n/time.Second, n/time.Millisecond
-		binary.Write(&buf, binary.BigEndian, uint8(panda.TagTM))
-		binary.Write(&buf, binary.BigEndian, uint32(s))
-		binary.Write(&buf, binary.BigEndian, uint8(ns)%255)
-		binary.Write(&buf, binary.BigEndian, uint32(0))
-		bs, err := p.Bytes()
-		if err != nil {
+		buf, err := makePacket(p, true)
+		if err != nil || buf.Len() == 0 {
 			return err
 		}
-		buf.Write(bs)
-
 		if _, err := io.Copy(c, &buf); err != nil {
 			return err
 		}
@@ -317,9 +365,7 @@ func (c *conn) Write(bs []byte) (int, error) {
 		)
 		if t, ok := c.gap.Wait(); !ok {
 			w, d = ioutil.Discard, t
-			log.Println("los start")
 		} else {
-			log.Println("aos start")
 			w, d = c.Conn, t
 		}
 		c.writer, c.after = w, time.After(d)
