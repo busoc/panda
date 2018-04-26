@@ -195,14 +195,72 @@ func runDistrib(cmd *cli.Command, args []string) error {
 	return http.ListenAndServe(c.Addr, nil)
 }
 
+var codec = websocket.Codec{
+	Marshal: func(v interface{}) ([]byte, byte, error) {
+		p, ok := v.(panda.Telemetry)
+		if !ok {
+			return nil, websocket.UnknownFrame, fmt.Errorf("%T", p)
+		}
+		bs, err := p.Bytes()
+		return bs, websocket.BinaryFrame, err
+	},
+}
+
 type group struct {
-	Name    string   `toml:"name"`
-	Addr    string   `toml:"addr"`
-	Apid    int      `toml:"apid"`
-	Sources []uint32 `toml:"source"`
+	Name     string    `toml:"name"`
+	Addr     string    `toml:"addr"`
+	Apid     int       `toml:"apid"`
+	Sources  []uint32  `toml:"source"`
+	Date     time.Time `toml:"limit"`
+	Delay    int64     `toml:"delay"`
+	Interval int64     `toml:"interval"`
 
 	limit int32
 	count int32
+}
+
+func (g *group) handleRealtime(r *http.Request) (<-chan panda.Telemetry, int, error) {
+	q, err := tm.Packets(g.Addr, g.Apid, g.Sources)
+	return q, 0, err
+}
+
+func (g *group) handleReplay(r *http.Request) (<-chan panda.Telemetry, int, error) {
+	rate := 1
+	q := r.URL.Query()
+	rate = 1
+	if r, err := strconv.ParseUint(q.Get("rate"), 10, 64); err == nil && (r >= 1 && r <= 5) {
+		rate = int(r)
+	}
+	n := time.Now().UTC().Truncate(time.Minute * 5)
+	dtend := n.Add(time.Duration(-g.Delay) * time.Second)
+	dtstart := dtend.Add(time.Duration(-g.Interval) * time.Second)
+	if d, err := time.Parse(time.RFC3339, q.Get("dtstart")); err == nil {
+		dtstart = d.Truncate(time.Minute * 5)
+	}
+	if d, err := time.Parse(time.RFC3339, q.Get("dtend")); err == nil {
+		dtend = d.Add(time.Minute * 5).Truncate(time.Minute * 5)
+	}
+	apid := g.Apid
+	if r, err := strconv.ParseInt(q.Get("apid"), 10, 64); err == nil {
+		apid = int(r)
+	}
+	queue := make(chan panda.Telemetry)
+	go func() {
+		defer close(queue)
+		for w := dtstart; w.Before(dtend); w = w.Add(time.Minute * 5) {
+			y, d, h, m := w.Year(), w.YearDay(), w.Hour(), w.Minute()
+			n := fmt.Sprintf("rt_%02d_%02d.dat", m, m+4)
+			p := filepath.Join(g.Addr, fmt.Sprintf("%04d", y), fmt.Sprintf("%03d", d), fmt.Sprintf("%02d", h), n)
+			q, err := tm.Packets(p, apid, g.Sources)
+			if err != nil {
+				return
+			}
+			for p := range q {
+				queue <- p
+			}
+		}
+	}()
+	return queue, rate, nil
 }
 
 func (g *group) Handle(ws *websocket.Conn) {
@@ -213,34 +271,25 @@ func (g *group) Handle(ws *websocket.Conn) {
 	if g.limit > 0 && curr >= int32(g.limit) {
 		return
 	}
-	var rate int
-	if r := ws.Request(); strings.HasPrefix(r.URL.Path, "/replay/") {
-		q := r.URL.Query()
-		rate = 1
-		if r, err := strconv.ParseUint(q.Get("rate"), 10, 64); err == nil {
-			rate = int(r)
-		}
-	}
-
-	codec := websocket.Codec{
-		Marshal: func(v interface{}) ([]byte, byte, error) {
-			p, ok := v.(panda.Telemetry)
-			if !ok {
-				return nil, websocket.UnknownFrame, fmt.Errorf("%T", p)
-			}
-			bs, err := p.Bytes()
-			return bs, websocket.BinaryFrame, err
-		},
-	}
 	var (
 		prev  time.Time
 		delta time.Duration
+		rate  int
+		err   error
+		queue <-chan panda.Telemetry
 	)
-	queue, err := tm.Packets(g.Addr, g.Apid, g.Sources)
+	if r := ws.Request(); strings.HasPrefix(r.URL.Path, "/replay/") {
+		queue, rate, err = g.handleReplay(r)
+	} else {
+		queue, rate, err = g.handleRealtime(r)
+	}
 	if err != nil {
 		return
 	}
 	for p := range queue {
+		if !prev.IsZero() && rate == 0 && prev.After(p.Timestamp()) {
+			continue
+		}
 		wait(delta, rate)
 		if err := codec.Send(ws, p); err != nil {
 			return
@@ -256,7 +305,11 @@ func wait(d time.Duration, r int) {
 	if d == 0 {
 		return
 	}
-	time.Sleep(d / time.Duration(r))
+	d = d / time.Duration(r)
+	if d < time.Millisecond*10 {
+		d = time.Millisecond * 10
+	}
+	time.Sleep(d)
 }
 
 func runReplay(cmd *cli.Command, args []string) error {
