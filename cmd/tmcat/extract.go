@@ -19,6 +19,7 @@ import (
 var ErrInvalidPosition = errors.New("invalid position")
 
 func runExtract(cmd *cli.Command, args []string) error {
+	zero := cmd.Flag.Bool("z", false, "")
 	count := cmd.Flag.Uint("n", 0, "count")
 	config := cmd.Flag.String("c", "", "config")
 	if err := cmd.Flag.Parse(args); err != nil {
@@ -39,15 +40,18 @@ func runExtract(cmd *cli.Command, args []string) error {
 		return err
 	}
 	var n uint
-	index := 1 + (panda.CCSDSLength / 2) + (panda.ESALength / 2) + (s.Offset / 16)
+	index := (panda.CCSDSLength / 2) + (panda.ESALength / 2) + (s.Offset / 16)
+	if !*zero {
+		index++
+	}
 	for p := range queue {
 		if *count > 0 && n >= *count {
 			break
 		}
-		n++
 		vs, err := s.Extract(p)
 		switch err {
 		case nil:
+			n++
 		case panda.ErrSkip:
 			continue
 		default:
@@ -67,6 +71,7 @@ func runExtract(cmd *cli.Command, args []string) error {
 
 type Item struct {
 	Label     string `toml:"name"`
+	Comment   string `toml:"comment"`
 	Type      string `toml:"type"`
 	Offset    int    `toml:"position"`
 	Length    int    `toml:"length"`
