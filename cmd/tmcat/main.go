@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -162,6 +163,7 @@ func runDistrib(cmd *cli.Command, args []string) error {
 	}
 	f.Close()
 
+	routes := make(map[string][]*group)
 	for _, g := range c.Groups {
 		g.limit = c.Client
 		var prefix string
@@ -170,7 +172,14 @@ func runDistrib(cmd *cli.Command, args []string) error {
 		} else {
 			prefix = "/replay/"
 		}
+		routes[prefix] = append(routes[prefix], g)
 		http.Handle(prefix+filepath.Clean(g.Name), websocket.Handler(g.Handle))
+	}
+	for r, gs := range routes {
+		gs := gs
+		http.HandleFunc(r, func(w http.ResponseWriter, r *http.Request) {
+			json.NewEncoder(w).Encode(gs)
+		})
 	}
 	return http.ListenAndServe(c.Addr, nil)
 }
@@ -187,13 +196,13 @@ var codec = websocket.Codec{
 }
 
 type group struct {
-	Name     string    `toml:"name"`
-	Addr     string    `toml:"addr"`
-	Apid     int       `toml:"apid"`
-	Sources  []uint32  `toml:"source"`
-	Date     time.Time `toml:"limit"`
-	Delay    int64     `toml:"delay"`
-	Interval int64     `toml:"interval"`
+	Name     string    `toml:"name" json:"name"`
+	Addr     string    `toml:"addr" json:"-"`
+	Apid     int       `toml:"apid" json:"apid"`
+	Sources  []uint32  `toml:"source" json:"sources"`
+	Date     time.Time `toml:"limit" json:"-"`
+	Delay    int64     `toml:"delay" json:"-"`
+	Interval int64     `toml:"interval" json:"-"`
 
 	limit int32
 	count int32
