@@ -70,15 +70,15 @@ func runExtract(cmd *cli.Command, args []string) error {
 }
 
 type Item struct {
-	Label     string `toml:"name"`
-	Comment   string `toml:"comment"`
-	Type      string `toml:"type"`
-	Offset    int    `toml:"position"`
-	Length    int    `toml:"length"`
-	Ignore    bool   `toml:"ignore"`
-	Endianess string `toml:"endianess"`
+	Label     string `toml:"name" json:"name"`
+	Comment   string `toml:"comment" json:"comment"`
+	Type      string `toml:"type" json:"type"`
+	Offset    int    `toml:"position" json:"position"`
+	Length    int    `toml:"length" json:"length"`
+	Ignore    bool   `toml:"ignore" json:"-"`
+	Endianess string `toml:"endianess" json:"-"`
 
-	Value interface{}
+	Value interface{} `json:"-"`
 }
 
 func (i Item) Position() int {
@@ -126,10 +126,11 @@ func (i Item) Extract(b *buffer) (Item, error) {
 }
 
 type Schema struct {
-	Name    string   `toml:"name"`
-	Offset  int64    `toml:"offset"`
-	Sources []uint32 `toml:"source"`
-	Items   []Item   `toml:"item"`
+	Name    string   `toml:"name" json:"name"`
+	Offset  int64    `toml:"offset" json:"offset"`
+	Sources []uint32 `toml:"source" json:"sources"`
+	Apid    uint16   `toml:"apid" json:"apid"`
+	Items   []Item   `toml:"item" json:"parameters"`
 }
 
 func (s Schema) Extract(p panda.Telemetry) ([]Item, error) {

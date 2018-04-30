@@ -157,11 +157,18 @@ func runDistrib(cmd *cli.Command, args []string) error {
 		Addr   string   `toml:"addr"`
 		Client int32    `toml:"client"`
 		Groups []*group `toml:"group"`
+		Paths  []string `toml:"schemas"`
 	}{}
 	if err := toml.NewDecoder(f).Decode(&c); err != nil {
 		return err
 	}
 	f.Close()
+
+	if h, err := handleSchemas(c.Paths); err == nil {
+		http.Handle("/mdb/", h)
+	} else {
+		return err
+	}
 
 	routes := make(map[string][]*group)
 	for _, g := range c.Groups {
@@ -182,6 +189,34 @@ func runDistrib(cmd *cli.Command, args []string) error {
 		})
 	}
 	return http.ListenAndServe(c.Addr, nil)
+}
+
+func handleSchemas(ps []string) (http.Handler, error) {
+	read := func(p string) (*Schema, error) {
+		f, err := os.Open(p)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+
+		var s Schema
+		if err := toml.NewDecoder(f).Decode(&s); err != nil {
+			return nil, err
+		}
+		return &s, nil
+	}
+	var cs []*Schema
+	for _, p := range ps {
+		s, err := read(p)
+		if err != nil {
+			return nil, err
+		}
+		cs = append(cs, s)
+	}
+	f := func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(cs)
+	}
+	return http.HandlerFunc(f), nil
 }
 
 var codec = websocket.Codec{
