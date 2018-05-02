@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -180,7 +181,13 @@ func runDistrib(cmd *cli.Command, args []string) error {
 			prefix = "/replay/"
 		}
 		routes[prefix] = append(routes[prefix], g)
-		http.Handle(prefix+filepath.Clean(g.Name), websocket.Handler(g.Handle))
+		u := url.URL{
+			Scheme: "ws",
+			Host:   c.Addr,
+			Path:   filepath.Clean(g.Name),
+		}
+		g.Endpoint = u.String()
+		http.Handle(u.Path, websocket.Handler(g.Handle))
 	}
 	for r, gs := range routes {
 		gs := gs
@@ -198,11 +205,18 @@ func handleSchemas(ps []string) (http.Handler, error) {
 			return nil, err
 		}
 		defer f.Close()
-
-		var s Schema
-		if err := toml.NewDecoder(f).Decode(&s); err != nil {
+		i, err := f.Stat()
+		if err != nil {
 			return nil, err
 		}
+
+		var s Schema
+		sum := md5.New()
+		r := io.TeeReader(f, sum)
+		if err := toml.NewDecoder(r).Decode(&s); err != nil {
+			return nil, err
+		}
+		s.Lastmod, s.Sum = i.ModTime(), fmt.Sprintf("%s", sum.Sum(nil))
 		return &s, nil
 	}
 	var cs []*Schema
@@ -232,6 +246,7 @@ var codec = websocket.Codec{
 
 type group struct {
 	Name     string    `toml:"name" json:"name"`
+	Endpoint string    `toml:"endpoint" json:"url"`
 	Addr     string    `toml:"addr" json:"-"`
 	Apid     int       `toml:"apid" json:"apid"`
 	Sources  []uint32  `toml:"source" json:"sources"`

@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/busoc/panda"
 	"github.com/midbel/cli"
@@ -131,6 +132,9 @@ type Schema struct {
 	Sources []uint32 `toml:"source" json:"sources"`
 	Apid    uint16   `toml:"apid" json:"apid"`
 	Items   []Item   `toml:"item" json:"parameters"`
+
+	Lastmod time.Time `json:"lastmod"`
+	Sum     string    `json:"md5sum"`
 }
 
 func (s Schema) Extract(p panda.Telemetry) ([]Item, error) {
