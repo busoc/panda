@@ -64,7 +64,8 @@ var (
 	SYNC = []byte("SYNC")
 	RAW  = []byte("RAW ")
 	Y800 = []byte("Y800")
-	Y16  = []byte("Y16 ")
+	Y16B  = []byte("Y16 ")
+	Y16L = []byte("Y16L")
 	I420 = []byte("I420")
 	YUY2 = []byte("YUY2")
 	RGB  = []byte("RGB ")
@@ -632,8 +633,10 @@ func (i *IDHv2) FCC() uint32 {
 		v = binary.BigEndian.Uint32(RAW)
 	case 1:
 		v = binary.BigEndian.Uint32(Y800)
-	case 2, 3:
-		v = binary.BigEndian.Uint32(Y16)
+	case 2:
+		v = binary.BigEndian.Uint32(Y16B)
+	case 3:
+		v = binary.BigEndian.Uint32(Y16L)
 	case 4:
 		v = binary.BigEndian.Uint32(YUY2)
 	case 5:
@@ -1012,7 +1015,9 @@ func exportImageMk2(w io.Writer, f string, t uint8, x *xy) error {
 	case 1: //gray8
 		i = img.ImageGray8(x.X, x.Y, x.Data)
 	case 2: //gray16-BE
+		i = img.ImageGray16(x.X, x.Y, x.Data, binary.BigEndian)
 	case 3: //gray16-LE
+		i = img.ImageGray16(x.X, x.Y, x.Data, binary.LittleEndian)
 	case 4: //yuy2
 		i = img.ImageLBR(x.X, x.Y, x.Data)
 	case 5: //i420
