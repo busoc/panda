@@ -60,10 +60,10 @@ func runExtract(cmd *cli.Command, args []string) error {
 		}
 		for _, v := range vs {
 			if v.Length == 0 {
-				v.Length = binary.Size(v.Value) * 8
+				v.Length = binary.Size(v.Raw) * 8
 			}
 			w := index + int64(v.Position()/2)
-			log.Printf("%3d | %2d | %2d | %-32s | %-6s | %v", w, v.Length, v.Offset%16, v.Label, v.Type, v.Value)
+			log.Printf("%3d | %2d | %2d | %-32s | %-6s | %16v | %16v", w, v.Length, v.Offset%16, v.Label, v.Type, v.Raw, v.Value)
 		}
 		log.Println("===")
 	}
@@ -71,15 +71,15 @@ func runExtract(cmd *cli.Command, args []string) error {
 }
 
 type Item struct {
-	Label     string `toml:"name" json:"name"`
-	Comment   string `toml:"comment" json:"comment"`
-	Type      string `toml:"type" json:"type"`
-	Offset    int    `toml:"position" json:"position"`
-	Length    int    `toml:"length" json:"length"`
-	Ignore    bool   `toml:"ignore" json:"-"`
-	Endianess string `toml:"endianess" json:"-"`
+	Label       string `toml:"name" json:"name"`
+	Comment     string `toml:"comment" json:"comment"`
+	Type        string `toml:"type" json:"type"`
+	Offset      int    `toml:"position" json:"position"`
+	Length      int    `toml:"length" json:"length"`
+	Ignore      bool   `toml:"ignore" json:"-"`
+	Endianess   string `toml:"endianess" json:"-"`
 
-	Value interface{} `json:"-"`
+	Raw, Value interface{} `json:"-"`
 }
 
 func (i Item) Position() int {
@@ -104,22 +104,22 @@ func (i Item) Extract(b *buffer) (Item, error) {
 	case "bool":
 		b, err := b.ReadUint8(v.Offset, v.Length, e)
 		if b == 1 && err == nil {
-			v.Value = true
+			v.Raw = true
 		}
 	case "uchar":
-		v.Value, err = b.ReadUint8(v.Offset, v.Length, e)
+		v.Raw, err = b.ReadUint8(v.Offset, v.Length, e)
 	case "ushort", "":
-		v.Value, err = b.ReadUint16(v.Offset, v.Length, e)
+		v.Raw, err = b.ReadUint16(v.Offset, v.Length, e)
 	case "ulong":
-		v.Value, err = b.ReadUint32(v.Offset, v.Length, e)
+		v.Raw, err = b.ReadUint32(v.Offset, v.Length, e)
 	case "char":
-		v.Value, err = b.ReadInt8(v.Offset, v.Length, e)
+		v.Raw, err = b.ReadInt8(v.Offset, v.Length, e)
 	case "short":
-		v.Value, err = b.ReadInt16(v.Offset, v.Length, e)
+		v.Raw, err = b.ReadInt16(v.Offset, v.Length, e)
 	case "long":
-		v.Value, err = b.ReadInt32(v.Offset, v.Length, e)
+		v.Raw, err = b.ReadInt32(v.Offset, v.Length, e)
 	case "float":
-		v.Value, err = b.ReadFloat(v.Offset, e)
+		v.Raw, err = b.ReadFloat(v.Offset, e)
 	default:
 		return i, fmt.Errorf("unsupported type %s", i.Type)
 	}

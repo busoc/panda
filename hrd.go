@@ -64,7 +64,7 @@ var (
 	SYNC = []byte("SYNC")
 	RAW  = []byte("RAW ")
 	Y800 = []byte("Y800")
-	Y16B  = []byte("Y16 ")
+	Y16B = []byte("Y16 ")
 	Y16L = []byte("Y16L")
 	I420 = []byte("I420")
 	YUY2 = []byte("YUY2")
