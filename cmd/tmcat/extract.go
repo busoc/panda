@@ -70,6 +70,75 @@ func runExtract(cmd *cli.Command, args []string) error {
 	return nil
 }
 
+type Number interface {
+  Int() int64
+  Float() float64
+}
+
+type Calibrater interface {
+  Calibrate(Number) (interface{}, error)
+}
+
+type identical struct {}
+
+func (i identical) Calibrate(n Number) interface{} {
+  return n
+}
+
+type point struct {
+  X int64
+  Y float64
+}
+
+type pair []point
+
+func (p pair) Calibrate(n Number) interface{} {
+  r := n.Int()
+  less := func(i, j int) bool { return p[i].X < p[j].X }
+  if !sort.SliceIsSorted(p, less) {
+    sort.Slice(p, less)
+  }
+  ix := sort.Search(len(p), func(i int) bool {
+    return r <= p[i].X
+  })
+  if ix >= len(p) {
+    return r
+  }
+  if p[ix].X == r {
+    return p[ix].Y
+  }
+  return r
+}
+
+type xy struct {
+  X int64
+  Y string
+}
+
+type enum []xy
+
+func (e enum) Calibrate(n Number) interface{} {
+  r := n.Int()
+  for _, v := range e {
+    if r == v.X {
+      return v.Y
+    }
+  }
+  return r
+}
+
+type polynomial []float64
+
+func (p polynomial) Calibrate(n Number) interface {} {
+  var i float64
+
+  r := n.Float()
+  for j := range p {
+    i += p[j] * math.Pow(r, float64(len(p)-1-j))
+  }
+  return i
+}
+
 type Item struct {
 	Label       string `toml:"name" json:"name"`
 	Comment     string `toml:"comment" json:"comment"`
