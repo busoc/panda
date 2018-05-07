@@ -69,11 +69,11 @@ func ImageGray8(x, y int, points []byte) image.Image {
 func ImageGray16(x, y int, points []byte, order binary.ByteOrder) image.Image {
 	g := image.NewGray16(image.Rect(0, 0, x, y))
 	buf := bytes.NewBuffer(points)
-	for i := 0; buf.Len() > 0; i++ {
-		for j := 0; j < y; j++ {
+	for i := 0; i < y; i++ {
+		for j := 0; j < x; j++ {
 			var c uint16
 			binary.Read(buf, order, &c)
-			g.Set(i, j, color.Gray16{Y: c})	
+			g.Set(j, i, color.Gray16{Y: c})
 		}
 	}
 	return g
