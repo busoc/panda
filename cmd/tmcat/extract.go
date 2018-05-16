@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"reflect"
 	"sort"
 	"time"
 
@@ -357,62 +358,54 @@ func (e Enumeration) Transform(r interface{}) (interface{}, error) {
 	return "***", fmt.Errorf("undefined value %v", r)
 }
 
-func toFloat(v interface{}) (float64, error) {
-	switch v := v.(type) {
-	case float64:
-		return v, nil
-	case int64:
-		return float64(v), nil
-	case int32:
-		return float64(v), nil
-	case int16:
-		return float64(v), nil
-	case int8:
-		return float64(v), nil
-	case int:
-		return float64(v), nil
-	case uint64:
-		return float64(v), nil
-	case uint32:
-		return float64(v), nil
-	case uint16:
-		return float64(v), nil
-	case uint8:
-		return float64(v), nil
-	case uint:
-		return float64(v), nil
-	default:
-		return 0, fmt.Errorf("can not cast %v to float64 %[1]T", v)
-	}
+func toInt(v interface{}) (int64, error) {
+  var (
+    i int64
+    err error
+  )
+  e := reflect.ValueOf(v)
+  switch k := e.Kind(); {
+  case isInt(k):
+    i = e.Int()
+  case isUint(k):
+    i = int64(e.Uint())
+  case isFloat(k):
+    i = int64(e.Float())
+  default:
+    err = fmt.Errorf("\"%v\" can not be converted to int64 (%s)", v, k)
+  }
+  return i, err
 }
 
-func toInt(v interface{}) (int64, error) {
-	switch v := v.(type) {
-	case int64:
-		return v, nil
-	case int32:
-		return int64(v), nil
-	case int16:
-		return int64(v), nil
-	case int8:
-		return int64(v), nil
-	case int:
-		return int64(v), nil
-	case uint64:
-		return int64(v), nil
-	case uint32:
-		return int64(v), nil
-	case uint16:
-		return int64(v), nil
-	case uint8:
-		return int64(v), nil
-	case uint:
-		return int64(v), nil
-	case float64:
-		return int64(v), nil
-	default:
-		return 0, fmt.Errorf("can not cast %v to int64 %[1]T", v)
-	}
+func toFloat(v interface{}) (float64, error) {
+  var (
+    i float64
+    err error
+  )
+  e := reflect.ValueOf(v)
+  switch k := e.Kind(); {
+  case isInt(k):
+    i = float64(e.Int())
+  case isUint(k):
+    i = float64(e.Uint())
+  case isFloat(k):
+    i = e.Float()
+  default:
+    err = fmt.Errorf("\"%v\" can not be converted to int64 (%s)", v, k)
+  }
+  return i, err
+}
+
+func isInt(k reflect.Kind) bool {
+	return k == reflect.Int || k == reflect.Int8 || k == reflect.Int16 || k == reflect.Int32 || k == reflect.Int64
+}
+
+func isUint(k reflect.Kind) bool {
+	return k == reflect.Uint || k == reflect.Uint8 || k == reflect.Uint16 || k == reflect.Uint32 || k == reflect.Uint64
+}
+
+func isFloat(k reflect.Kind) bool {
+	return k == reflect.Float32 || k == reflect.Float64
 }
 
 type Method string
