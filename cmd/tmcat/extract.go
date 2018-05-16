@@ -20,6 +20,8 @@ import (
 var ErrInvalidPosition = errors.New("invalid position")
 
 func runExtract(cmd *cli.Command, args []string) error {
+	log.SetOutput(os.Stdout)
+
 	zero := cmd.Flag.Bool("z", false, "")
 	count := cmd.Flag.Uint("n", 0, "count")
 	config := cmd.Flag.String("c", "", "config")
@@ -63,92 +65,36 @@ func runExtract(cmd *cli.Command, args []string) error {
 				v.Length = binary.Size(v.Raw) * 8
 			}
 			w := index + int64(v.Position()/2)
-			log.Printf("%3d | %2d | %2d | %-32s | %-6s | %16v | %16v", w, v.Length, v.Offset%16, v.Label, v.Type, v.Raw, v.Value)
+			result, err := v.Calibrate()
+			if err != nil {
+				return err
+			}
+			log.Printf("%3d | %2d | %2d | %-32s | %-6s | %16v | %16v", w, v.Length, v.Offset%16, v.Label, v.Type, v.Raw, result)
 		}
 		log.Println("===")
 	}
 	return nil
 }
 
-type Number interface {
-  Int() int64
-  Float() float64
-}
-
-type Calibrater interface {
-  Calibrate(Number) (interface{}, error)
-}
-
-type identical struct {}
-
-func (i identical) Calibrate(n Number) interface{} {
-  return n
-}
-
-type point struct {
-  X int64
-  Y float64
-}
-
-type pair []point
-
-func (p pair) Calibrate(n Number) interface{} {
-  r := n.Int()
-  less := func(i, j int) bool { return p[i].X < p[j].X }
-  if !sort.SliceIsSorted(p, less) {
-    sort.Slice(p, less)
-  }
-  ix := sort.Search(len(p), func(i int) bool {
-    return r <= p[i].X
-  })
-  if ix >= len(p) {
-    return r
-  }
-  if p[ix].X == r {
-    return p[ix].Y
-  }
-  return r
-}
-
-type xy struct {
-  X int64
-  Y string
-}
-
-type enum []xy
-
-func (e enum) Calibrate(n Number) interface{} {
-  r := n.Int()
-  for _, v := range e {
-    if r == v.X {
-      return v.Y
-    }
-  }
-  return r
-}
-
-type polynomial []float64
-
-func (p polynomial) Calibrate(n Number) interface {} {
-  var i float64
-
-  r := n.Float()
-  for j := range p {
-    i += p[j] * math.Pow(r, float64(len(p)-1-j))
-  }
-  return i
-}
-
 type Item struct {
-	Label       string `toml:"name" json:"name"`
-	Comment     string `toml:"comment" json:"comment"`
-	Type        string `toml:"type" json:"type"`
-	Offset      int    `toml:"position" json:"position"`
-	Length      int    `toml:"length" json:"length"`
-	Ignore      bool   `toml:"ignore" json:"-"`
-	Endianess   string `toml:"endianess" json:"-"`
+	Label     string `toml:"name" json:"name"`
+	Comment   string `toml:"comment" json:"comment"`
+	Type      string `toml:"type" json:"type"`
+	Offset    int    `toml:"position" json:"position"`
+	Length    int    `toml:"length" json:"length"`
+	Ignore    bool   `toml:"ignore" json:"-"`
+	Endianess string `toml:"endianess" json:"-"`
 
-	Raw, Value interface{} `json:"-"`
+	Method *Domain `toml:"calibration"`
+
+	Raw interface{} `toml:"-" json:"-"`
+}
+
+func (i Item) Calibrate() (interface{}, error) {
+	if i.Method == nil {
+		return i.Raw, nil
+	}
+	return i.Method.Transform(i.Raw)
 }
 
 func (i Item) Position() int {
@@ -360,6 +306,184 @@ func (b *buffer) readValue(i interface{}, x, n int, e binary.ByteOrder) error {
 		return err
 	}
 	return binary.Read(b.inner, e, i)
+}
+
+type Transformer interface {
+	Transform(interface{}) (interface{}, error)
+}
+
+type Pair struct {
+	X int64
+	Y float64
+}
+
+type Polynomial []Pair
+
+func (p Polynomial) Transform(r interface{}) (interface{}, error) {
+	v, err := toFloat(r)
+	if err != nil {
+		return r, err
+	}
+	var t float64
+	for i := range p {
+		t += math.Pow(v, float64(p[i].X)) * p[i].Y
+	}
+	return t, nil
+}
+
+type PointPair []Pair
+
+func (p PointPair) Transform(r interface{}) (interface{}, error) {
+	return 0.0, nil
+}
+
+type Enum struct {
+	X int64
+	Y string
+}
+
+type Enumeration []Enum
+
+func (e Enumeration) Transform(r interface{}) (interface{}, error) {
+	v, err := toInt(r)
+	if err != nil {
+		return r, err
+	}
+	for i := range e {
+		if e[i].X == v {
+			return e[i].Y, nil
+		}
+	}
+	return "***", fmt.Errorf("undefined value %v", r)
+}
+
+func toFloat(v interface{}) (float64, error) {
+	switch v := v.(type) {
+	case float64:
+		return v, nil
+	case int64:
+		return float64(v), nil
+	case int32:
+		return float64(v), nil
+	case int16:
+		return float64(v), nil
+	case int8:
+		return float64(v), nil
+	case int:
+		return float64(v), nil
+	case uint64:
+		return float64(v), nil
+	case uint32:
+		return float64(v), nil
+	case uint16:
+		return float64(v), nil
+	case uint8:
+		return float64(v), nil
+	case uint:
+		return float64(v), nil
+	default:
+		return 0, fmt.Errorf("can not cast %v to float64 %[1]T", v)
+	}
+}
+
+func toInt(v interface{}) (int64, error) {
+	switch v := v.(type) {
+	case int64:
+		return v, nil
+	case int32:
+		return int64(v), nil
+	case int16:
+		return int64(v), nil
+	case int8:
+		return int64(v), nil
+	case int:
+		return int64(v), nil
+	case uint64:
+		return int64(v), nil
+	case uint32:
+		return int64(v), nil
+	case uint16:
+		return int64(v), nil
+	case uint8:
+		return int64(v), nil
+	case uint:
+		return int64(v), nil
+	case float64:
+		return int64(v), nil
+	default:
+		return 0, fmt.Errorf("can not cast %v to int64 %[1]T", v)
+	}
+}
+
+type Method string
+
+type Set struct {
+	method    *Method
+	Transform Transformer
+}
+
+func (s *Set) UnmarshalOption(d *toml.Decoder) error {
+	switch m := string(*s.method); m {
+	case "enum", "enumeration":
+		vs := make([]Enum, 0)
+		if err := d.DecodeElement(&vs); err != nil {
+			return err
+		}
+		sort.Slice(vs, func(i, j int) bool {
+			return vs[i].X < vs[j].X
+		})
+		s.Transform = Enumeration(vs)
+	case "poly", "polynomial":
+		vs := make([]Pair, 0)
+		if err := d.DecodeElement(&vs); err != nil {
+			return err
+		}
+		sort.Slice(vs, func(i, j int) bool {
+			return vs[i].X < vs[j].X
+		})
+		s.Transform = Polynomial(vs)
+	case "pair", "pointpair":
+		vs := make([]Pair, 0)
+		if err := d.DecodeElement(&vs); err != nil {
+			return err
+		}
+		sort.Slice(vs, func(i, j int) bool {
+			return vs[i].X < vs[j].X
+		})
+		s.Transform = PointPair(vs)
+	default:
+		return fmt.Errorf("unsupported calibration method")
+	}
+	return nil
+}
+
+func (m *Method) UnmarshalOption(d *toml.Decoder) error {
+	var v string
+	if err := d.DecodeElement(&v); err != nil {
+		return err
+	}
+	*m = Method(v)
+	return nil
+}
+
+type Domain struct {
+	Transformer
+}
+
+func (t *Domain) UnmarshalTOML(d *toml.Decoder) error {
+	var meth Method
+	v := struct {
+		Option *Method `toml:"method"`
+		Domain *Set    `toml:"domain"`
+	}{
+		Option: &meth,
+		Domain: &Set{method: &meth},
+	}
+	if err := d.DecodeElement(&v); err != nil {
+		return err
+	}
+	t.Transformer = v.Domain.Transform
+	return nil
 }
 
 func index(n int) (int, int) {
