@@ -118,6 +118,7 @@ func decodeVMUv2(bs []byte) (int, Packet, error) {
 			VMUHeader: &v,
 			IDH:       &h,
 			Data:      vs,
+			Sum:       binary.LittleEndian.Uint32(bs[len(bs)-4:]),
 		}
 	case Science:
 		h, err := decodeSDHv2(bs[ix : ix+SDHeaderLengthV2])
@@ -131,6 +132,7 @@ func decodeVMUv2(bs []byte) (int, Packet, error) {
 			VMUHeader: &v,
 			SDH:       &h,
 			Data:      vs,
+			Sum:       binary.LittleEndian.Uint32(bs[len(bs)-4:]),
 		}
 	}
 	return len(bs), p, nil
@@ -817,7 +819,7 @@ type Image struct {
 	*VMUHeader
 	IDH  interface{}
 	Data []byte
-	Sum  uint16
+	Sum  uint32
 }
 
 func (i *Image) Format() string {
