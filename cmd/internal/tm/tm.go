@@ -5,24 +5,9 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
-	"time"
 
 	"github.com/busoc/panda"
 )
-
-type raw []byte
-
-func (r raw) Timestamp() time.Time {
-	return time.Now()
-}
-
-func (r raw) Bytes() ([]byte, error) {
-	return r.Payload(), nil
-}
-
-func (r raw) Payload() []byte {
-	return r
-}
 
 func Open(a string) (io.Reader, error) {
 	if _, _, err := net.SplitHostPort(a); err == nil {

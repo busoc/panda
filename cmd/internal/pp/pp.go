@@ -10,15 +10,15 @@ import (
 
 func Open(a string) (io.Reader, error) {
 	if _, _, err := net.SplitHostPort(a); err == nil {
-		return mud.Listen("pp", a)
+		return panda.Listen("pp", a)
 	}
-	return mud.Walk("pp", a)
+	return panda.Walk("pp", a)
 }
 
-func Filter(r io.Reader, d mud.Decoder) <-chan mud.Parameter {
-	q := make(chan mud.Parameter)
+func Filter(r io.Reader, d panda.Decoder) <-chan panda.Parameter {
+	q := make(chan panda.Parameter)
 	go func() {
-		source := mud.NewReader(r, d)
+		source := panda.NewReader(r, d)
 		defer func() {
 			close(q)
 			source.Close()
@@ -27,10 +27,10 @@ func Filter(r io.Reader, d mud.Decoder) <-chan mud.Parameter {
 			p, err := source.Read()
 			switch err {
 			case nil:
-				if p, ok := p.(mud.Parameter); ok {
+				if p, ok := p.(panda.Parameter); ok {
 					q <- p
 				}
-			case mud.ErrDone:
+			case panda.ErrDone:
 				return
 			}
 		}
@@ -38,7 +38,7 @@ func Filter(r io.Reader, d mud.Decoder) <-chan mud.Parameter {
 	return q
 }
 
-func Packets(addr string, codes []uint64) (<-chan mud.Parameter, error) {
+func Packets(addr string, codes []uint64) (<-chan panda.Parameter, error) {
 	r, err := Open(addr)
 	if err != nil {
 		return nil, err
@@ -48,14 +48,14 @@ func Packets(addr string, codes []uint64) (<-chan mud.Parameter, error) {
 
 type Decoder struct {
 	codes   [][]byte
-	decoder mud.Decoder
+	decoder panda.Decoder
 }
 
-func NewDecoder(cs []uint64) mud.Decoder {
+func NewDecoder(cs []uint64) panda.Decoder {
 	if len(cs) == 0 {
-		return mud.DecodePP()
+		return panda.DecodePP()
 	}
-	d := mud.DecodePP()
+	d := panda.DecodePP()
 	var vs [][]byte
 	for _, c := range cs {
 		vs = append(vs, Itob(c))
@@ -63,21 +63,21 @@ func NewDecoder(cs []uint64) mud.Decoder {
 	return Decoder{vs, d}
 }
 
-func (d Decoder) Decode(bs []byte) (int, mud.Packet, error) {
+func (d Decoder) Decode(bs []byte) (int, panda.Packet, error) {
 	i, p, err := d.decoder.Decode(bs)
 	if err != nil {
 		return i, nil, err
 	}
-	u, ok := p.(mud.Parameter)
+	u, ok := p.(panda.Parameter)
 	if !ok {
-		return i, nil, mud.ErrSkip
+		return i, nil, panda.ErrSkip
 	}
 	for _, c := range d.codes {
 		if bytes.Equal(c, u.Code[:]) {
 			return i, p, nil
 		}
 	}
-	return i, nil, mud.ErrSkip
+	return i, nil, panda.ErrSkip
 }
 
 func Itob(v uint64) []byte {

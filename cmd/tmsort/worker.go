@@ -144,7 +144,7 @@ func (w *Worker) UnmarshalJSON(bs []byte) error {
 	return nil
 }
 
-func (w *Worker) sortPackets(queue <-chan mud.Telemetry, buf buffer.Buffer) error {
+func (w *Worker) sortPackets(queue <-chan panda.Telemetry, buf buffer.Buffer) error {
 	var prev time.Time
 	for p := range queue {
 		t := p.Timestamp()

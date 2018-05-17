@@ -15,7 +15,7 @@ import (
 )
 
 type Buffer interface {
-	Write(mud.Packet) (int, int, error)
+	Write(panda.Packet) (int, int, error)
 	Flush(time.Time) error
 }
 
@@ -40,16 +40,16 @@ func New(i, d string, c bool) Buffer {
 	}
 }
 
-func (f *flat) Write(p mud.Packet) (int, int, error) {
+func (f *flat) Write(p panda.Packet) (int, int, error) {
 	bs, err := p.Bytes()
 	if err != nil {
 		return int(atomic.LoadUint64(&f.count)), f.buf.Len(), err
 	}
 	if f.compat {
 		switch p.(type) {
-		case mud.Parameter:
+		case panda.Parameter:
 			binary.Write(f.buf, binary.LittleEndian, uint32(len(bs)))
-		case mud.Telemetry:
+		case panda.Telemetry:
 			t := time.Now()
 			binary.Write(f.buf, binary.LittleEndian, uint32(len(bs)+6))
 			binary.Write(f.buf, binary.BigEndian, uint8(0x09))
@@ -77,7 +77,7 @@ func (f *flat) Flush(t time.Time) error {
 	if t.IsZero() {
 		t = time.Now()
 	}
-	n := fmt.Sprintf("%s_%06d_%06d_%s.dat", f.prefix, s, c, t.Add(mud.GPS.Sub(mud.UNIX)).Format("20060102_150405"))
+	n := fmt.Sprintf("%s_%06d_%06d_%s.dat", f.prefix, s, c, t.Add(panda.GPS.Sub(panda.UNIX)).Format("20060102_150405"))
 
 	w, err := os.Create(filepath.Join(f.datadir, n))
 	if err != nil {
