@@ -1,12 +1,12 @@
 package panda
 
 import (
-  "encoding/binary"
-  "fmt"
-  "sort"
-  "time"
+	"encoding/binary"
+	"fmt"
+	"sort"
+	"time"
 
-  "github.com/busoc/panda/internal/buffer"
+	"github.com/busoc/panda/internal/buffer"
 )
 
 type Item struct {

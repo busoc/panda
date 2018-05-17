@@ -1,12 +1,12 @@
 package buffer
 
 import (
-  "bytes"
-  "errors"
-  "encoding/binary"
-  "io"
-  "math"
-  "fmt"
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"io"
+	"math"
 )
 
 var ErrInvalidPosition = errors.New("invalid position")

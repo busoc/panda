@@ -359,41 +359,41 @@ func (e Enumeration) Transform(r interface{}) (interface{}, error) {
 }
 
 func toInt(v interface{}) (int64, error) {
-  var (
-    i int64
-    err error
-  )
-  e := reflect.ValueOf(v)
-  switch k := e.Kind(); {
-  case isInt(k):
-    i = e.Int()
-  case isUint(k):
-    i = int64(e.Uint())
-  case isFloat(k):
-    i = int64(e.Float())
-  default:
-    err = fmt.Errorf("\"%v\" can not be converted to int64 (%s)", v, k)
-  }
-  return i, err
+	var (
+		i   int64
+		err error
+	)
+	e := reflect.ValueOf(v)
+	switch k := e.Kind(); {
+	case isInt(k):
+		i = e.Int()
+	case isUint(k):
+		i = int64(e.Uint())
+	case isFloat(k):
+		i = int64(e.Float())
+	default:
+		err = fmt.Errorf("\"%v\" can not be converted to int64 (%s)", v, k)
+	}
+	return i, err
 }
 
 func toFloat(v interface{}) (float64, error) {
-  var (
-    i float64
-    err error
-  )
-  e := reflect.ValueOf(v)
-  switch k := e.Kind(); {
-  case isInt(k):
-    i = float64(e.Int())
-  case isUint(k):
-    i = float64(e.Uint())
-  case isFloat(k):
-    i = e.Float()
-  default:
-    err = fmt.Errorf("\"%v\" can not be converted to int64 (%s)", v, k)
-  }
-  return i, err
+	var (
+		i   float64
+		err error
+	)
+	e := reflect.ValueOf(v)
+	switch k := e.Kind(); {
+	case isInt(k):
+		i = float64(e.Int())
+	case isUint(k):
+		i = float64(e.Uint())
+	case isFloat(k):
+		i = e.Float()
+	default:
+		err = fmt.Errorf("\"%v\" can not be converted to int64 (%s)", v, k)
+	}
+	return i, err
 }
 
 func isInt(k reflect.Kind) bool {
