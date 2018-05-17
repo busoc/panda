@@ -3,7 +3,6 @@ package panda
 import (
 	"bytes"
 	"encoding/binary"
-	"io"
 	"math"
 	"time"
 )
@@ -222,51 +221,4 @@ func encodeUMI(u UMIHeader) ([]byte, error) {
 	binary.Write(w, binary.BigEndian, u.Length)
 
 	return w.Bytes(), nil
-}
-
-type reader struct {
-	io.Reader
-	err  error
-	size int64
-}
-
-func newReader(b []byte) *reader {
-	return &reader{Reader: bytes.NewReader(b)}
-}
-
-func (r *reader) ReadLE(v interface{}) (int64, error) {
-	return r.read(v, binary.LittleEndian)
-}
-
-func (r *reader) ReadBE(v interface{}) (int64, error) {
-	return r.read(v, binary.BigEndian)
-}
-
-func (r *reader) Read(b []byte) (int, error) {
-	if r.err != nil {
-		return int(r.size), r.err
-	}
-	c, err := r.Reader.Read(b)
-	if err != nil {
-		r.err = err
-	} else {
-		r.size += int64(c)
-	}
-	return c, err
-}
-
-func (r *reader) read(v interface{}, e binary.ByteOrder) (int64, error) {
-	defer func() {
-		if r.err != nil {
-			return
-		}
-		r.size += int64(binary.Size(v))
-	}()
-	if r.err != nil {
-		return r.size, r.err
-	}
-	if err := binary.Read(r.Reader, binary.LittleEndian, v); err != nil {
-		r.err = err
-	}
-	return r.size, nil
 }
