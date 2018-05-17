@@ -84,6 +84,27 @@ const (
 	LCP           = 0x90
 )
 
+func Valid(p HRPacket) bool {
+	var sum uint32
+	switch p := p.(type) {
+	case *Table:
+		sum = p.Sum
+	case *Image:
+		sum = p.Sum
+	default:
+		return false
+	}
+	bs, err := p.Bytes()
+	if err != nil {
+		return false
+	}
+	var cmp uint32
+	for i := range bs[:len(bs)-binary.Size(cmp)] {
+		cmp += uint32(bs[i])
+	}
+	return cmp == sum
+}
+
 func DecodeHR(v int) (Decoder, error) {
 	switch v {
 	default:
@@ -479,6 +500,7 @@ func encodeSDHv2(s SDHv2) ([]byte, error) {
 	binary.Write(w, binary.LittleEndian, s.Acquisition)
 	binary.Write(w, binary.LittleEndian, s.Auxiliary)
 	binary.Write(w, binary.LittleEndian, s.Id)
+	w.Write(s.Info[:])
 
 	return w.Bytes(), nil
 }
@@ -749,7 +771,12 @@ func (t *Table) Filename() string {
 	}
 	offset := int64(delta.Minutes())
 	n := t.Timestamp().Format("20060102_150405")
-	return fmt.Sprintf("%04x_%s_%d_%06d_%s_%09d.dat", id, upi, t.Stream(), seq, n, offset)
+
+	ext := "dat"
+	if !Valid(t) {
+		ext += ".bad"
+	}
+	return fmt.Sprintf("%04x_%s_%d_%06d_%s_%09d.%s", id, upi, t.Stream(), seq, n, offset, ext)
 }
 
 func (t *Table) Timestamp() time.Time {
@@ -904,6 +931,9 @@ func (i *Image) Filename() string {
 	}
 	n := i.Timestamp().Format("20060102_150405")
 	offset := int64(delta.Minutes())
+	if !Valid(i) {
+		ext += ".bad"
+	}
 	return fmt.Sprintf("%04x_%s_%d_%06d_%s_%09d.%s", id, upi, i.Stream(), seq, n, offset, ext)
 }
 
