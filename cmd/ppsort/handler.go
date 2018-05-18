@@ -17,9 +17,9 @@ import (
 )
 
 type query struct {
-	Codes []uint64
-	Start time.Time
-	End   time.Time
+	Codes []uint64 `json:"codes"`
+	Start time.Time `json:"dtstart"`
+	End   time.Time `json:"dtend"`
 
 	filename string
 }
@@ -33,7 +33,7 @@ func Validate(r io.Reader, d, i time.Duration) (*query, error) {
 	if delta := n.Sub(q.End); delta < d {
 		return nil, fmt.Errorf("invalid interval")
 	}
-	if delta := q.End.Sub(q.Start); delta < i {
+	if delta := q.End.Sub(q.Start); delta >= i {
 		return nil, fmt.Errorf("invalid interval")
 	}
 	return q, nil
