@@ -9,11 +9,9 @@ import (
 	"strconv"
 	"sync/atomic"
 	"text/template"
-	"time"
 
 	"github.com/gorilla/websocket"
 
-	"github.com/busoc/panda"
 	"github.com/busoc/panda/cmd/internal/opts"
 	"github.com/busoc/panda/cmd/internal/pp"
 	"github.com/midbel/cli"
@@ -74,7 +72,6 @@ func runShow(cmd *cli.Command, args []string) error {
 
 	var codes opts.UMISet
 	cmd.Flag.Var(&codes, "u", "umi code")
-	gps := cmd.Flag.Bool("g", false, "gps")
 	if err := cmd.Flag.Parse(args); err != nil {
 		return err
 	}
@@ -85,7 +82,7 @@ func runShow(cmd *cli.Command, args []string) error {
 	for p := range queue {
 		u := p.UMIHeader
 		fmt.Printf(pattern,
-			mud.ConvertTime(u.Timestamp(), *gps).Format("2006-01-02T15:04:05.000Z"),
+			u.Timestamp().Format("2006-01-02T15:04:05.000Z"),
 			u.State,
 			u.Code,
 			u.Type,
