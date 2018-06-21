@@ -17,7 +17,7 @@ import (
 )
 
 type query struct {
-	Codes []uint64 `json:"codes"`
+	Codes []uint64  `json:"codes"`
 	Start time.Time `json:"dtstart"`
 	End   time.Time `json:"dtend"`
 

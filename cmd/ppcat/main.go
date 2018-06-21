@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/busoc/panda"
 	"github.com/busoc/panda/cmd/internal/opts"
 	"github.com/busoc/panda/cmd/internal/pp"
 	"github.com/midbel/cli"
@@ -21,7 +23,7 @@ import (
 var commands = []*cli.Command{
 	{
 		Run:   runShow,
-		Usage: "show [-a] [-g] [-s] <source>",
+		Usage: "show [-u] [-g] [-e] [-c] <source>",
 		Alias: []string{"dump"},
 		Short: "",
 	},
@@ -68,10 +70,13 @@ func usage() {
 }
 
 func runShow(cmd *cli.Command, args []string) error {
-	const pattern = "%s | %-12s | %x | %-12s | %6d | %5d | %-24x | %-v\n"
+	const pattern = "%s | %-12s | %x | %x | %-12s | %6d | %5d | %-24x | %-v\n"
 
 	var codes opts.UMISet
 	cmd.Flag.Var(&codes, "u", "umi code")
+	gps := cmd.Flag.Bool("g", false, "gps time")
+	erronly := cmd.Flag.Bool("e", false, "show error only")
+	errcode := cmd.Flag.Uint("c", 0, "show error with code")
 	if err := cmd.Flag.Parse(args); err != nil {
 		return err
 	}
@@ -81,9 +86,26 @@ func runShow(cmd *cli.Command, args []string) error {
 	}
 	for p := range queue {
 		u := p.UMIHeader
+		orbit := binary.BigEndian.Uint32(u.Orbit[:])
+		if *erronly && orbit == 0 {
+			continue
+		} else {
+			code := uint32(*errcode)
+			if code != 0 && orbit != code {
+				continue
+			}
+		}
+		if !*erronly && orbit > 0 {
+			continue
+		}
+		t := u.Timestamp()
+		if !*gps {
+			t = t.Add(panda.GPS.Sub(panda.UNIX))
+		}
 		fmt.Printf(pattern,
-			u.Timestamp().Format("2006-01-02T15:04:05.000Z"),
+			t.Format("2006-01-02T15:04:05.000Z"),
 			u.State,
+			u.Orbit,
 			u.Code,
 			u.Type,
 			u.Unit,
@@ -94,35 +116,6 @@ func runShow(cmd *cli.Command, args []string) error {
 	}
 	return nil
 }
-
-// func runDistrib(cmd *cli.Command, args []string) error {
-// 	if err := cmd.Flag.Parse(args); err != nil {
-// 		return err
-// 	}
-// 	f, err := os.Open(cmd.Flag.Arg(0))
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer f.Close()
-// 	c := struct {
-// 		Addr     string `toml:"address"`
-// 		Datadir  string `toml:"datadir"`
-// 		Interval int    `toml:"interval"`
-// 		Delay    int    `toml:"delay"`
-// 	}{}
-// 	if err := toml.NewDecoder(f).Decode(&c); err != nil {
-// 		return err
-// 	}
-// 	if i, err := os.Stat(c.Datadir); !(err == nil || i.IsDir()) {
-// 		return fmt.Errorf("invalid datadir %s")
-// 	}
-// 	a := distrib.UMIArchive{
-// 		Datadir:  c.Datadir,
-// 		Delay:    time.Duration(c.Delay) * time.Second,
-// 		Interval: time.Duration(c.Interval) * time.Second,
-// 	}
-// 	return http.ListenAndServe(c.Addr, a)
-// }
 
 func runDistrib(cmd *cli.Command, args []string) error {
 	if err := cmd.Flag.Parse(args); err != nil {
