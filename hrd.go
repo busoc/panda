@@ -117,6 +117,11 @@ func DecodeHR(v int) (Decoder, error) {
 }
 
 func decodeVMUv2(bs []byte) (int, Packet, error) {
+	if len(bs) <= VMUHeaderLength+IDHeaderLengthV2 || len(bs) <= VMUHeaderLength+SDHeaderLengthV2 {
+		idh := VMUHeaderLength + IDHeaderLengthV2
+		sdh := VMUHeaderLength + SDHeaderLengthV2
+		return len(bs), nil, fmt.Errorf("packet size to short: %d (sciences: %d bytes, images: %d bytes)", len(bs), sdh, idh)
+	}
 	ix := VMUHeaderLength
 	v, err := decodeVMU(bs[:ix])
 	if err != nil {
