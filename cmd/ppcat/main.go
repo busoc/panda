@@ -75,6 +75,7 @@ func runShow(cmd *cli.Command, args []string) error {
 	var codes opts.UMISet
 	cmd.Flag.Var(&codes, "u", "umi code")
 	gps := cmd.Flag.Bool("g", false, "gps time")
+	all := cmd.Flag.Bool("a", false, "show all")
 	erronly := cmd.Flag.Bool("e", false, "show error only")
 	errcode := cmd.Flag.Uint("c", 0, "show error with code")
 	if err := cmd.Flag.Parse(args); err != nil {
@@ -86,22 +87,25 @@ func runShow(cmd *cli.Command, args []string) error {
 	}
 	for p := range queue {
 		u := p.UMIHeader
-		orbit := binary.BigEndian.Uint32(u.Orbit[:])
-		if *erronly && orbit == 0 {
-			continue
-		} else {
-			code := uint32(*errcode)
-			if code != 0 && orbit != code {
+		if !*all {
+			orbit := binary.BigEndian.Uint32(u.Orbit[:])
+			if *erronly && orbit == 0 {
+				continue
+			} else {
+				code := uint32(*errcode)
+				if code != 0 && orbit != code {
+					continue
+				}
+			}
+			if !*erronly && orbit > 0 {
 				continue
 			}
-		}
-		if !*erronly && orbit > 0 {
-			continue
 		}
 		t := u.Timestamp()
 		if !*gps {
 			t = t.Add(panda.GPS.Sub(panda.UNIX))
 		}
+
 		fmt.Printf(pattern,
 			t.Format("2006-01-02T15:04:05.000Z"),
 			u.State,
