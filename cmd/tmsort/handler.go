@@ -15,6 +15,7 @@ import (
 
 	"github.com/busoc/panda/cmd/internal/pool"
 	"github.com/busoc/panda/cmd/internal/tm"
+	"github.com/busoc/panda/cmd/internal/rw"
 )
 
 type query struct {
@@ -130,7 +131,7 @@ func (a *Archive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	buf := new(bytes.Buffer)
-	if err := q.Write(a.Datadir, buf); err != nil {
+	if err := q.Write(a.Datadir, rw.NoDuplicate(buf)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

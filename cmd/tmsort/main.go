@@ -51,8 +51,13 @@ The commands are:
 Use {{.Name}} [command] -h for more information about its usage.
 `
 
-func main() {
+func init() {
 	log.SetFlags(0)
+	cli.Version = "1.1.0"
+	cli.BuildTime = "2018-08-27 06:12:00"
+}
+
+func main() {
 	usage := func() {
 		data := struct {
 			Name     string
