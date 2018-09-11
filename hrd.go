@@ -53,6 +53,8 @@ const (
 	SDHeaderLengthV1 = 8
 )
 
+const UPILen = 32
+
 const (
 	VMUProtocol1 = iota + 1
 	VMUProtocol2
