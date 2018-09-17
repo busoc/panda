@@ -75,6 +75,7 @@ var (
 	PNG  = []byte("PNG ")
 	H264 = []byte("H264")
 	SVS  = []byte("SVS ")
+	TIFF = []byte("TIFF")
 )
 
 const (
