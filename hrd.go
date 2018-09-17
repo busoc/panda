@@ -610,7 +610,7 @@ func (i *IDHv2) MarshalXML(e *xml.Encoder, s xml.StartElement) error {
 		X     uint32 `xml:"size-x"`
 		Y     uint32 `xml:"size-y"`
 		Ratio uint8  `xml:"force-aspect-ratio"`
-	}{X: i.Scaling >> 16, Y: i.Scaling & 0x0000FFFF, Ratio: i.Ratio}
+	}{X: i.Scaling & 0x0000FFFF, Y: i.Scaling >> 16, Ratio: i.Ratio}
 
 	x, a := i.Acquire()
 
