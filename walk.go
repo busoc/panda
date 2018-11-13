@@ -68,7 +68,7 @@ func (w *walker) read() ([]byte, error) {
 		}
 		w.rc = r
 		w.sc = bufio.NewScanner(w.rc)
-		w.sc.Buffer(make([]byte, 4096), 1024*1024*1024)
+		w.sc.Buffer(make([]byte, 4096), 8<<20)
 		w.sc.Split(scan(w.skip))
 	}
 	if !w.sc.Scan() {

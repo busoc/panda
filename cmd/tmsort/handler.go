@@ -15,7 +15,6 @@ import (
 
 	"github.com/busoc/panda/cmd/internal/pool"
 	"github.com/busoc/panda/cmd/internal/tm"
-	"github.com/busoc/panda/cmd/internal/rw"
 )
 
 type query struct {
@@ -26,8 +25,8 @@ type query struct {
 }
 
 func Validate(r io.Reader, t time.Time, d, i time.Duration, ids []int) (*query, error) {
-	q := new(query)
-	if err := json.NewDecoder(r).Decode(q); err != nil {
+	var q query
+	if err := json.NewDecoder(r).Decode(&q); err != nil {
 		return nil, err
 	}
 	ix := sort.SearchInts(ids, q.Apid)
@@ -44,7 +43,7 @@ func Validate(r io.Reader, t time.Time, d, i time.Duration, ids []int) (*query, 
 	if delta := q.End.Sub(q.Start); delta >= i {
 		return nil, fmt.Errorf("invalid interval: interval %s (max: %s)", delta, i)
 	}
-	return q, nil
+	return &q, nil
 }
 
 func (q *query) Write(d string, w io.Writer) error {
@@ -117,6 +116,8 @@ type Archive struct {
 }
 
 func (a *Archive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -130,15 +131,21 @@ func (a *Archive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	buf := new(bytes.Buffer)
-	if err := q.Write(a.Datadir, rw.NoDuplicate(buf)); err != nil {
+	// buf := new(bytes.Buffer)
+	var buf bytes.Buffer
+	defer buf.Reset()
+	if err := q.Write(a.Datadir, &buf); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if buf.Len() == 0 {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	w.Header().Set("content-type", "application/octet-stream")
 	w.Header().Set("content-length", fmt.Sprint(buf.Len()))
 	w.Header().Set("content-disposition", fmt.Sprintf("attachment; filename=\"%s\"", q.String()))
-	if _, err := io.Copy(w, buf); err != nil {
+	if _, err := io.Copy(w, &buf); err != nil {
 		log.Println(err)
 	}
 }

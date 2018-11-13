@@ -54,8 +54,8 @@ Use {{.Name}} [command] -h for more information about its usage.
 
 func init() {
 	log.SetFlags(0)
-	cli.Version = "1.1.0"
-	cli.BuildTime = "2018-08-27 06:12:00"
+	cli.Version = "1.1.1"
+	cli.BuildTime = "2018-11-12 06:55:00"
 }
 
 func main() {
