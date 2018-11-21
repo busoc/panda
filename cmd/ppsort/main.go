@@ -26,7 +26,7 @@ var commands = []*cli.Command{
 		Run:   runDispatch,
 	},
 	{
-		Usage: "filter [-a] [-n] [-d] [-c] [-e] <path...>",
+		Usage: "filter [-u] [-n] [-d] [-c] [-e] <path...>",
 		Short: "filter PP packets from the HRDP archive",
 		Run:   runFilter,
 	},
