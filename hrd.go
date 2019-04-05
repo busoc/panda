@@ -615,12 +615,12 @@ func (i *IDHv2) MarshalXML(e *xml.Encoder, s xml.StartElement) error {
 		Ratio uint8  `xml:"force-aspect-ratio"`
 	}{X: i.Scaling & 0x0000FFFF, Y: i.Scaling >> 16, Ratio: i.Ratio}
 
-	x, a := i.Acquire()
+	// x, a := i.Acquire()
 
 	e.EncodeElement(sp, xml.StartElement{Name: xml.Name{Local: "stream"}})
 	e.EncodeElement(qs, xml.StartElement{Name: xml.Name{Local: "sequences"}})
-	e.EncodeElement(a, xml.StartElement{Name: xml.Name{Local: "timestamp"}})
-	e.EncodeElement(x, xml.StartElement{Name: xml.Name{Local: "auxiliary"}})
+	e.EncodeElement(i.Timestamp(), xml.StartElement{Name: xml.Name{Local: "timestamp"}})
+	e.EncodeElement(i.Auxiliary.Nanoseconds(), xml.StartElement{Name: xml.Name{Local: "auxiliary"}})
 	e.EncodeElement(i.Type, xml.StartElement{Name: xml.Name{Local: "type"}})
 	e.EncodeElement(xy, xml.StartElement{Name: xml.Name{Local: "pixels"}})
 	e.EncodeElement(rs, xml.StartElement{Name: xml.Name{Local: "region"}})
