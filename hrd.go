@@ -607,7 +607,7 @@ func (i *IDHv2) MarshalXML(e *xml.Encoder, s xml.StartElement) error {
 		SizeX   uint16 `xml:"size-x"`
 		OffsetY uint16 `xml:"offset-y"`
 		SizeY   uint16 `xml:"size-y"`
-	}{uint16(rx >> 16), uint16(rx & 0xFFFF), uint16(ry >> 16), uint16(ry & 0xFFFF)}
+	}{uint16(rx & 0xFFFF), uint16(rx >> 16), uint16(ry & 0xFFFF), uint16(ry >> 16)}
 
 	cs := struct {
 		X     uint32 `xml:"size-x"`
