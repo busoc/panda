@@ -51,6 +51,7 @@ const (
 	IDHeaderLengthV2 = 76
 	SDHeaderLengthV2 = 56
 	SDHeaderLengthV1 = 8
+	CheckTrailerLength = 4
 )
 
 const UPILen = 32
@@ -120,10 +121,11 @@ func DecodeHR(v int) (Decoder, error) {
 }
 
 func decodeVMUv2(bs []byte) (int, Packet, error) {
-	if len(bs) <= VMUHeaderLength+IDHeaderLengthV2 || len(bs) <= VMUHeaderLength+SDHeaderLengthV2 {
-		idh := VMUHeaderLength + IDHeaderLengthV2
-		sdh := VMUHeaderLength + SDHeaderLengthV2
-		return len(bs), nil, fmt.Errorf("packet size to short: %d (sciences: %d bytes, images: %d bytes)", len(bs), sdh, idh)
+	size := len(bs)-CheckTrailerLength
+	if size <= VMUHeaderLength+IDHeaderLengthV2 || size <= VMUHeaderLength+SDHeaderLengthV2 {
+		idh := VMUHeaderLength + IDHeaderLengthV2 + CheckTrailerLength
+		sdh := VMUHeaderLength + SDHeaderLengthV2 + CheckTrailerLength
+		return len(bs), nil, fmt.Errorf("packet size too short: %d (sciences: %d bytes, images: %d bytes)", len(bs), sdh, idh)
 	}
 	ix := VMUHeaderLength
 	v, err := decodeVMU(bs[:ix])
