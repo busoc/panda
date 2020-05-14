@@ -120,10 +120,13 @@ func DecodeHR(v int) (Decoder, error) {
 }
 
 func decodeVMUv2(bs []byte) (int, Packet, error) {
-	if len(bs) <= VMUHeaderLength+IDHeaderLengthV2 || len(bs) <= VMUHeaderLength+SDHeaderLengthV2 {
-		idh := VMUHeaderLength + IDHeaderLengthV2
-		sdh := VMUHeaderLength + SDHeaderLengthV2
-		return len(bs), nil, fmt.Errorf("packet size to short: %d (sciences: %d bytes, images: %d bytes)", len(bs), sdh, idh)
+	// if len(bs) <= VMUHeaderLength+IDHeaderLengthV2 || len(bs) <= VMUHeaderLength+SDHeaderLengthV2 {
+	// 	idh := VMUHeaderLength + IDHeaderLengthV2
+	// 	sdh := VMUHeaderLength + SDHeaderLengthV2
+	// 	return len(bs), nil, fmt.Errorf("packet size too short: %d (sciences: %d bytes, images: %d bytes)", len(bs), sdh, idh)
+	// }
+	if len(bs) < VMUHeaderLength {
+		return len(bs), nil, fmt.Errorf("packet too short: %d (expected at least %d)", len(bs), VMUHeaderLength)
 	}
 	ix := VMUHeaderLength
 	v, err := decodeVMU(bs[:ix])
@@ -136,6 +139,10 @@ func decodeVMUv2(bs []byte) (int, Packet, error) {
 	default:
 		return len(bs), nil, fmt.Errorf("unknown channel %d", v.Channel)
 	case Video1, Video2:
+		idh := VMUHeaderLength + IDHeaderLengthV2
+		if len(bs) <= idh {
+			return len(bs), nil, fmt.Errorf("packet too short: %d (expected at least %d)", len(bs), idh)
+		}
 		h, err := decodeIDHv2(bs[ix : ix+IDHeaderLengthV2])
 		if err != nil {
 			return len(bs), nil, err
@@ -150,6 +157,10 @@ func decodeVMUv2(bs []byte) (int, Packet, error) {
 			Sum:       binary.LittleEndian.Uint32(bs[len(bs)-4:]),
 		}
 	case Science:
+		sdh := VMUHeaderLength + SDHeaderLengthV2
+		if len(bs) <= sdh {
+			return len(bs), nil, fmt.Errorf("packet too short: %d (expected at least %d)", len(bs), sdh)
+		}
 		h, err := decodeSDHv2(bs[ix : ix+SDHeaderLengthV2])
 		if err != nil {
 			return len(bs), nil, err
