@@ -51,6 +51,7 @@ const (
 	IDHeaderLengthV2 = 76
 	SDHeaderLengthV2 = 56
 	SDHeaderLengthV1 = 8
+	CheckTrailerLength = 4
 )
 
 const UPILen = 32
