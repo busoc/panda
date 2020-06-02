@@ -149,7 +149,11 @@ func decodeVMUv2(bs []byte) (int, Packet, error) {
 			return len(bs), nil, err
 		}
 		ix += IDHeaderLengthV2
-		vs := make([]byte, len(bs)-ix-4)
+		length := len(bs)-ix-4
+		if (length <= 0) {
+			return len(bs), nil, fmt.Errorf("packet too short: %d", len(bs))
+		}
+		vs := make([]byte, length)
 		copy(vs, bs[ix:len(bs)-4])
 		p = &Image{
 			VMUHeader: &v,
@@ -167,7 +171,11 @@ func decodeVMUv2(bs []byte) (int, Packet, error) {
 			return len(bs), nil, err
 		}
 		ix += SDHeaderLengthV2
-		vs := make([]byte, len(bs)-ix-4)
+		length := len(bs)-ix-4
+		if (length <= 0) {
+			return len(bs), nil, fmt.Errorf("packet too short: %d", len(bs))
+		}
+		vs := make([]byte, length)
 		copy(vs, bs[ix:len(bs)-4])
 		p = &Table{
 			VMUHeader: &v,
