@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/busoc/timutil"
+	//"github.com/busoc/timutil"
 	img "github.com/busoc/panda/internal/image"
 	"github.com/busoc/panda/internal/science"
 )
@@ -255,7 +255,9 @@ func (v *VMUHeader) Stream() Channel {
 }
 
 func (v *VMUHeader) Timestamp() time.Time {
-	return timutil.Join6(v.Coarse, v.Fine)
+	t := time.Unix(int64(v.Coarse), 0).Add(time.Duration(v.Fine)*time.Millisecond)
+	return t.UTC()
+	//return timutil.Join6(v.Coarse, v.Fine)
 }
 
 func (v *VMUHeader) Generated() time.Time {
